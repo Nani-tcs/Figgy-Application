@@ -1,0 +1,66 @@
+# skaffold.yaml
+apiVersion: skaffold/v2beta28
+kind: Config
+metadata:
+  name: figgy-food-delivery
+build:
+  artifacts:
+  - image: user-service
+    context: user_service
+    docker:
+      dockerfile: Dockerfile
+  - image: order-processor
+    context: order_processor
+    docker:
+      dockerfile: Dockerfile
+  - image: restaurant-service
+    context: restaurant_service
+    docker:
+      dockerfile: Dockerfile
+  tagPolicy:
+    gitCommit: {} # Tags images with git commit SHA
+deploy:
+  cloudrun:
+    # Skaffold does not support deploying Cloud Functions directly.
+    # Cloud Functions need to be deployed separately or via Cloud Build.
+    # This section focuses on Cloud Run services.
+    defaultProjectID: "[YOUR_PROJECT_ID]"
+    region: "[YOUR_REGION]"
+    projects:
+      - "[YOUR_PROJECT_ID]"
+    configs:
+      - service: user-service
+        image: user-service
+        # For local development, allow unauthenticated access
+        flags:
+          - "--allow-unauthenticated"
+        env:
+          - name: GCP_PROJECT
+            value: "[YOUR_PROJECT_ID]"
+      - service: order-processor
+        image: order-processor
+        # Internal service, no direct unauthenticated access
+        flags:
+          - "--no-allow-unauthenticated"
+        env:
+          - name: GCP_PROJECT
+            value: "[YOUR_PROJECT_ID]"
+          # Need to simulate Pub/Sub message for local testing
+          # This would typically involve a local Pub/Sub emulator or test harness
+          - name: PUBSUB_EMULATOR_HOST
+            value: "localhost:8085" # Example for local emulator
+      - service: restaurant-service
+        image: restaurant-service
+        # Internal service, no direct unauthenticated access
+        flags:
+          - "--no-allow-unauthenticated"
+        env:
+          - name: GCP_PROJECT
+            value: "[YOUR_PROJECT_ID]"
+          # Need to simulate Pub/Sub message for local testing
+          - name: PUBSUB_EMULATOR_HOST
+            value: "localhost:8085" # Example for local emulator
+portForward:
+  - resourceType: Service
+    resourceName: user-service
+    port: 8080 # Expose User Service on localhost:8080
