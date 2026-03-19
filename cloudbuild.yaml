@@ -49,7 +49,7 @@ steps:
       - '${_REGION}'
       - '--service-account'
       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--no-allow-unauthenticated' # Internal service, no direct unauthenticated access
+      - '--no-allow-unauthenticated'  # Internal service, no direct unauthenticated access
       - '--set-env-vars'
       - 'GCP_PROJECT=$PROJECT_ID'
     waitFor: ['Deploy User Service', 'Push Order Processor Image']
@@ -140,10 +140,10 @@ steps:
       - '${_REGION}'
       - '--service-account'
       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--allow-unauthenticated' # Cloud Tasks will handle auth via OIDC token
-      - '--set-env-vars' # Pass PROJECT_ID for common client to initialize
+      - '--allow-unauthenticated'  # Cloud Tasks will handle auth via OIDC token
+      - '--set-env-vars'  # Pass PROJECT_ID for common client to initialize
       - 'GCP_PROJECT=$PROJECT_ID'
-    waitFor: ['Deploy Restaurant Service'] # Ensure other services are up
+    waitFor: ['Deploy Restaurant Service']  # Ensure other services are up
 
   # Deploy Delivery Orchestrator (Cloud Function)
   - id: 'Deploy Delivery Orchestrator CF'
