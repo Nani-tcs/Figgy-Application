@@ -1,4 +1,7 @@
 steps:
+  - id: 'Set Default Region'
+    name: 'gcr.io/cloud-builders/gcloud'
+    args: ['config','set','run/region','${_REGION}']
   # Build and Deploy User Service (Cloud Run)
   - id: 'Build User Service'
     name: 'gcr.io/cloud-builders/docker'
