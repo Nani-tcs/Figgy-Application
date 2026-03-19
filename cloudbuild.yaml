@@ -62,6 +62,12 @@ steps:
       - |
         # Get the URL of the order-processor service
         SERVICE_URL=$(gcloud run services describe order-processor --platform managed --region ${_REGION} --format 'value(status.url)')
+        
+        if [ -z "$SERVICE_URL" ]; then
+          echo "Failed to fetch Order Processor service URL. Exiting..."
+          exit 1
+        fi
+        
         echo "Order Processor Service URL: $SERVICE_URL"
         
         # Create or update the Pub/Sub subscription with the service URL
@@ -110,6 +116,12 @@ steps:
       - |
         # Get the URL of the restaurant-service service
         SERVICE_URL=$(gcloud run services describe restaurant-service --platform managed --region ${_REGION} --format 'value(status.url)')
+        
+        if [ -z "$SERVICE_URL" ]; then
+          echo "Failed to fetch Restaurant service URL. Exiting..."
+          exit 1
+        fi
+        
         echo "Restaurant Service URL: $SERVICE_URL"
         
         # Create or update the Pub/Sub subscription with the service URL
@@ -154,6 +166,12 @@ steps:
       - |
         # Get the URL of the delivery-completion-service function
         DELIVERY_COMPLETION_URL=$(gcloud functions describe delivery-completion-service --region ${_REGION} --format 'value(httpsTrigger.url)')
+        
+        if [ -z "$DELIVERY_COMPLETION_URL" ]; then
+          echo "Failed to fetch Delivery Completion service URL. Exiting..."
+          exit 1
+        fi
+        
         echo "Delivery Completion Service URL: $DELIVERY_COMPLETION_URL"
         
         # Deploy Delivery Orchestrator Cloud Function with the URL
@@ -161,15 +179,4 @@ steps:
           --runtime python39 \
           --trigger-http \
           --source ./delivery_orchestrator \
-          --entry-point orchestrate_delivery \
-          --region "${_REGION}" \
-          --service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
-          --no-allow-unauthenticated \
-          --set-env-vars="DELIVERY_COMPLETION_URL=$DELIVERY_COMPLETION_URL,GCP_PROJECT=$PROJECT_ID,FUNCTION_REGION=${_REGION},SERVICE_ACCOUNT_EMAIL=figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com"
-    waitFor: ['Deploy Delivery Completion CF']
-
-# Set global environment variables
-options:
-  logging: CLOUD_LOGGING_ONLY
-substitutions:
-  _REGION: us-central1  # Default region, override with --substitutions=_REGION=your-region
+          --entry-point
