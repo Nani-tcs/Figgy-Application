@@ -1,199 +1,193 @@
-     1 steps:
-     2   # Build and Deploy User Service (Cloud Run)
-     3   - id: 'Build User Service'
-     4     name: 'gcr.io/cloud-builders/docker'
-     5     args: ['build', '-t', 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA', './user_service']
-     6
-     7   - id: 'Push User Service Image'
-     8     name: 'gcr.io/cloud-builders/docker'
-     9     args: ['push', 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA']
-    10
-    11   - id: 'Deploy User Service'
-    12     name: 'gcr.io/cloud-builders/gcloud'
-    13     args:
-    14       - 'run'
-    15       - 'deploy'
-    16       - 'user-service'
-    17       - '--image'
-    18       - 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA'
-    19       - '--platform'
-    20       - 'managed'
-    21       - '--region'
-    22       - '${_REGION}'
-    23       - '--service-account'
-    24       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-    25       - '--allow-unauthenticated'
-    26       - '--set-env-vars'
-    27       - 'GCP_PROJECT=$PROJECT_ID'
-    28
-    29   # Build and Deploy Order Processor (Cloud Run)
-    30   - id: 'Build Order Processor'
-    31     name: 'gcr.io/cloud-builders/docker'
-    32     args: ['build', '-t', 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA', './order_processor']
-    33
-    34   - id: 'Push Order Processor Image'
-    35     name: 'gcr.io/cloud-builders/docker'
-    36     args: ['push', 'gcr.io/$PROJECT_ID/order-service:$COMMIT_SHA']
-    37
-    38   - id: 'Deploy Order Processor'
-    39     name: 'gcr.io/cloud-builders/gcloud'
-    40     args:
-    41       - 'run'
-    42       - 'deploy'
-    43       - 'order-processor'
-    44       - '--image'
-    45       - 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA'
-    46       - '--platform'
-    47       - 'managed'
-    48       - '--region'
-    49       - '${_REGION}'
-    50       - '--service-account'
-    51       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-    52       - '--no-allow-unauthenticated'  # Internal service, no direct unauthenticated access
-    53       - '--set-env-vars'
-    54       - 'GCP_PROJECT=$PROJECT_ID'
-    55     waitFor: ['Deploy User Service', 'Push Order Processor Image']
-    56
-    57   - id: 'Create Order Processor Pub/Sub Subscription'
-    58     name: 'gcr.io/cloud-builders/gcloud'
-    59     entrypoint: 'bash'
-    60     args:
-    61       - '-c'
-    62       - |
-    63         # Get the URL of the order-processor service
-    64         SERVICE_URL=$(gcloud run services describe order-processor --platform managed --region ${_REGION} --format
-       'value(status.url)')
-    65
-    66         if [ -z "$SERVICE_URL" ]; then
-    67           echo "Failed to fetch Order Processor service URL. Exiting..."
-    68           exit 1
-    69         fi
-    70
-    71         echo "Order Processor Service URL: $SERVICE_URL"
-    72
-    73         # Create or update the Pub/Sub subscription with the service URL
-    74         gcloud pubsub subscriptions create order-processor-sub \
-    75           --topic orders.place \
-    76           --push-endpoint "$SERVICE_URL" \
-    77           --enable-wrapper-headers \
-    78           --push-auth-service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
-    79           --ack-deadline=300 \
-    80           --message-retention-duration=7d || true
-    81     waitFor: ['Deploy Order Processor']
-    82
-    83   # Build and Deploy Restaurant Service (Cloud Run)
-    84   - id: 'Build Restaurant Service'
-    85     name: 'gcr.io/cloud-builders/docker'
-    86     args: ['build', '-t', 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA', './restaurant_service']
-    87
-    88   - id: 'Push Restaurant Service Image'
-    89     name: 'gcr.io/cloud-builders/docker'
-    90     args: ['push', 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA']
-    91
-    92   - id: 'Deploy Restaurant Service'
-    93     name: 'gcr.io/cloud-builders/gcloud'
-    94     args:
-    95       - 'run'
-    96       - 'deploy'
-    97       - 'restaurant-service'
-    98       - '--image'
-    99       - 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA'
-   100       - '--platform'
-   101       - 'managed'
-   102       - '--region'
-   103       - '${_REGION}'
-   104       - '--service-account'
-   105       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-   106       - '--no-allow-unauthenticated'
-   107       - '--set-env-vars'
-   108       - 'GCP_PROJECT=$PROJECT_ID'
-   109     waitFor: ['Deploy Order Processor', 'Push Restaurant Service Image']
-   110
-   111   - id: 'Create Restaurant Service Pub/Sub Subscription'
-   112     name: 'gcr.io/cloud-builders/gcloud'
-   113     entrypoint: 'bash'
-   114     args:
-   115       - '-c'
-   116       - |
-   117         # Get the URL of the restaurant-service service
-   118         SERVICE_URL=$(gcloud run services describe restaurant-service --platform managed --region ${_REGION} --format
-       'value(status.url)')
-   119
-   120         if [ -z "$SERVICE_URL" ]; then
-   121           echo "Failed to fetch Restaurant service URL. Exiting..."
-   122           exit 1
-   123         fi
-   124
-   125         echo "Restaurant Service URL: $SERVICE_URL"
-   126
-   127         # Create or update the Pub/Sub subscription with the service URL
-   128         gcloud pubsub subscriptions create restaurant-service-sub \
-   129           --topic orders.created \
-   130           --push-endpoint "$SERVICE_URL" \
-   131           --enable-wrapper-headers \
-   132           --push-auth-service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
-   133           --ack-deadline=300 \
-   134           --message-retention-duration=7d || true
-   135     waitFor: ['Deploy Restaurant Service']
-   136
-   137   # Deploy Delivery Completion Service (Cloud Function) - needs to be deployed first to get URL
-   138   - id: 'Deploy Delivery Completion CF'
-   139     name: 'gcr.io/cloud-builders/gcloud'
-   140     args:
-   141       - 'functions'
-   142       - 'deploy'
-   143       - 'delivery-completion-service'
-   144       - '--runtime'
-   145       - 'python39'
-   146       - '--trigger-http'
-   147       - '--source'
-   148       - './delivery_completion_service'
-   149       - '--entry-point'
-   150       - 'complete_delivery'
-   151       - '--region'
-   152       - '${_REGION}'
-   153       - '--service-account'
-   154       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-   155       - '--allow-unauthenticated'  # Cloud Tasks will handle auth via OIDC token
-   156       - '--set-env-vars'  # Pass PROJECT_ID for common client to initialize
-   157       - 'GCP_PROJECT=$PROJECT_ID'
-   158     waitFor: ['Deploy Restaurant Service']  # Ensure other services are up
-   159
-   160   # Deploy Delivery Orchestrator (Cloud Function)
-   161   - id: 'Deploy Delivery Orchestrator CF'
-   162     name: 'gcr.io/cloud-builders/gcloud'
-   163     entrypoint: 'bash'
-   164     args:
-   165       - '-c'
-   166       - |
-   167         # Get the URL of the delivery-completion-service function
-   168         DELIVERY_COMPLETION_URL=$(gcloud functions describe delivery-completion-service --region ${_REGION} --format
-       'value(httpsTrigger.url)')
-   169
-   170         if [ -z "$DELIVERY_COMPLETION_URL" ]; then
-   171           echo "Failed to fetch Delivery Completion service URL. Exiting..."
-   172           exit 1
-   173         fi
-   174
-   175         echo "Delivery Completion Service URL: $DELIVERY_COMPLETION_URL"
-   176
-   177         # Deploy Delivery Orchestrator Cloud Function with the URL
-   178         gcloud functions deploy delivery-orchestrator \
-   179           --runtime python39 \
-   180           --trigger-http \
-   181           --source ./delivery_orchestrator \
-   182           --entry-point orchestrate_delivery \
-   183           --region "${_REGION}" \
-   184           --service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
-   185           --no-allow-unauthenticated \
-   186           --set-env-vars="DELIVERY_COMPLETION_URL=$DELIVERY_COMPLETION_URL,\
-   187             GCP_PROJECT=$PROJECT_ID,\
-   188             FUNCTION_REGION=${_REGION},\
-   189             SERVICE_ACCOUNT_EMAIL=figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com"
-   190     waitFor: ['Deploy Delivery Completion CF']
-   191
-   192 # Set global environment variables
-   193 options:
-   194   logging: CLOUD_LOGGING_ONLY  # Ensures logs are written to Cloud Logging
-   195 substitutions:
-   196   _REGION: us-central1  # Default region, override with --substitutions=_REGION=your-region
+steps:
+  # Build and Deploy User Service (Cloud Run)
+  - id: 'Build User Service'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA', './user_service']
+
+  - id: 'Push User Service Image'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA']
+    
+  - id: 'Deploy User Service'
+    name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'user-service'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - '${_REGION}'
+      - '--service-account'
+      - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--allow-unauthenticated'
+      - '--set-env-vars'
+      - 'GCP_PROJECT=$PROJECT_ID'
+
+  # Build and Deploy Order Processor (Cloud Run)
+  - id: 'Build Order Processor'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA', './order_processor']
+  
+  - id: 'Push Order Processor Image'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA']
+  
+  - id: 'Deploy Order Processor'
+    name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'order-processor'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - '${_REGION}'
+      - '--service-account'
+      - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--no-allow-unauthenticated'  # Internal service, no direct unauthenticated access
+      - '--set-env-vars'
+      - 'GCP_PROJECT=$PROJECT_ID'
+    waitFor: ['Deploy User Service', 'Push Order Processor Image']
+  
+  - id: 'Create Order Processor Pub/Sub Subscription'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get the URL of the order-processor service
+        SERVICE_URL=$(gcloud run services describe order-processor --platform managed --region ${_REGION} --format 'value(status.url)')
+        
+        if [ -z "$SERVICE_URL" ]; then
+          echo "Failed to fetch Order Processor service URL. Exiting..."
+          exit 1
+        fi
+        
+        echo "Order Processor Service URL: $SERVICE_URL"
+        
+        # Create or update the Pub/Sub subscription with the service URL
+        gcloud pubsub subscriptions create order-processor-sub \
+          --topic orders.place \
+          --push-endpoint "$SERVICE_URL" \
+          --enable-wrapper-headers \
+          --push-auth-service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
+          --ack-deadline=300 \
+          --message-retention-duration=7d || true
+    waitFor: ['Deploy Order Processor']
+
+  # Build and Deploy Restaurant Service (Cloud Run)
+  - id: 'Build Restaurant Service'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA', './restaurant_service']
+  
+  - id: 'Push Restaurant Service Image'
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA']
+  
+  - id: 'Deploy Restaurant Service'
+    name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'restaurant-service'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA'
+      - '--platform'
+      - 'managed'
+      - '--region'
+      - '${_REGION}'
+      - '--service-account'
+      - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--no-allow-unauthenticated'
+      - '--set-env-vars'
+      - 'GCP_PROJECT=$PROJECT_ID'
+    waitFor: ['Deploy Order Processor', 'Push Restaurant Service Image']
+  
+  - id: 'Create Restaurant Service Pub/Sub Subscription'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get the URL of the restaurant-service service
+        SERVICE_URL=$(gcloud run services describe restaurant-service --platform managed --region ${_REGION} --format 'value(status.url)')
+        
+        if [ -z "$SERVICE_URL" ]; then
+          echo "Failed to fetch Restaurant service URL. Exiting..."
+          exit 1
+        fi
+        
+        echo "Restaurant Service URL: $SERVICE_URL"
+        
+        # Create or update the Pub/Sub subscription with the service URL
+        gcloud pubsub subscriptions create restaurant-service-sub \
+          --topic orders.created \
+          --push-endpoint "$SERVICE_URL" \
+          --enable-wrapper-headers \
+          --push-auth-service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
+          --ack-deadline=300 \
+          --message-retention-duration=7d || true
+    waitFor: ['Deploy Restaurant Service']
+
+  # Deploy Delivery Completion Service (Cloud Function)
+  - id: 'Deploy Delivery Completion CF'
+    name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'functions'
+      - 'deploy'
+      - 'delivery-completion-service'
+      - '--runtime'
+      - 'python39'
+      - '--trigger-http'
+      - '--source'
+      - './delivery_completion_service'
+      - '--entry-point'
+      - 'complete_delivery'
+      - '--region'
+      - '${_REGION}'
+      - '--service-account'
+      - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--allow-unauthenticated'
+      - '--set-env-vars' 
+      - 'GCP_PROJECT=$PROJECT_ID'
+    waitFor: ['Deploy Restaurant Service']
+
+  # Deploy Delivery Orchestrator (Cloud Function)
+  - id: 'Deploy Delivery Orchestrator CF'
+    name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        # Get the URL of the delivery-completion-service function
+        DELIVERY_COMPLETION_URL=$(gcloud functions describe delivery-completion-service --region ${_REGION} --format 'value(httpsTrigger.url)')
+        
+        if [ -z "$DELIVERY_COMPLETION_URL" ]; then
+          echo "Failed to fetch Delivery Completion service URL. Exiting..."
+          exit 1
+        fi
+        
+        echo "Delivery Completion Service URL: $DELIVERY_COMPLETION_URL"
+        
+        # Deploy Delivery Orchestrator Cloud Function with the URL
+        gcloud functions deploy delivery-orchestrator \
+          --runtime python39 \
+          --trigger-http \
+          --source ./delivery_orchestrator \
+          --entry-point orchestrate_delivery \
+          --region "${_REGION}" \
+          --service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
+          --no-allow-unauthenticated \
+          --set-env-vars="DELIVERY_COMPLETION_URL=$DELIVERY_COMPLETION_URL,GCP_PROJECT=$PROJECT_ID,FUNCTION_REGION=${_REGION},SERVICE_ACCOUNT_EMAIL=figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com"
+    waitFor: ['Deploy Delivery Completion CF']
+
+options:
+  logging: CLOUD_LOGGING_ONLY  # Ensures logs are written to Cloud Logging
+
+substitutions:
+  _REGION: us-central1  # Default region, override with --substitutions=_REGION=your-region
