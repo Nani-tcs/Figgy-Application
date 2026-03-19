@@ -49,7 +49,7 @@ steps:
       - '${_REGION}'
       - '--service-account'
       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--no-allow-unauthenticated'  # Internal service, no direct unauthenticated access
+      - '--no-allow-unauthenticated'
       - '--set-env-vars'
       - 'GCP_PROJECT=$PROJECT_ID'
     waitFor: ['Deploy User Service', 'Push Order Processor Image']
