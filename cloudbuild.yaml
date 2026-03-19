@@ -179,4 +179,15 @@ steps:
           --runtime python39 \
           --trigger-http \
           --source ./delivery_orchestrator \
-          --entry-point
+          --entry-point orchestrate_delivery \
+          --region "${_REGION}" \
+          --service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
+          --no-allow-unauthenticated \
+          --set-env-vars="DELIVERY_COMPLETION_URL=$DELIVERY_COMPLETION_URL,GCP_PROJECT=$PROJECT_ID,FUNCTION_REGION=${_REGION},SERVICE_ACCOUNT_EMAIL=figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com"
+    waitFor: ['Deploy Delivery Completion CF']
+
+# Set global environment variables
+options:
+  logging: CLOUD_LOGGING_ONLY  # Ensures logs are written to Cloud Logging
+substitutions:
+  _REGION: us-central1  # Default region, override with --substitutions=_REGION=your-region
