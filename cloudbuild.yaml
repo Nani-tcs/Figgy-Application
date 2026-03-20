@@ -64,7 +64,7 @@ steps:
       - '-c'
       - |
         # Get the URL of the order-processor service
-        SERVICE_URL=$(gcloud run services describe order-processor --platform managed --region ${_REGION} --format 'value(status.url)')
+        SERVICE_URL=$$(gcloud run services describe order-processor --platform managed --region ${_REGION} --format 'value(status.url)')
         
         if [ -z "$SERVICE_URL" ]; then
           echo "Failed to fetch Order Processor service URL. Exiting..."
