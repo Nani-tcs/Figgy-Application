@@ -1,18 +1,16 @@
 steps:
-  # Set Default Region
   - id: 'Set Default Region'
     name: 'gcr.io/cloud-builders/gcloud'
     args: ['config','set','run/region','${_REGION}']
 
-  # ----------------------
   # Build and Deploy User Service (Cloud Run)
   - id: 'Build User Service'
     name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/user-service:$SHORT_SHA', './user_service']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA', './user_service']
 
   - id: 'Push User Service Image'
     name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/user-service:$SHORT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA']
     
   - id: 'Deploy User Service'
     name: 'gcr.io/cloud-builders/gcloud'
@@ -21,7 +19,7 @@ steps:
       - 'deploy'
       - 'user-service'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/user-service:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/user-service:$COMMIT_SHA'
       - '--platform'
       - 'managed'
       - '--region'
@@ -32,15 +30,14 @@ steps:
       - '--set-env-vars'
       - 'GCP_PROJECT=$PROJECT_ID'
 
-  # ----------------------
   # Build and Deploy Order Processor (Cloud Run)
   - id: 'Build Order Processor'
     name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/order-processor:$SHORT_SHA', './order_processor']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA', './order_processor']
   
   - id: 'Push Order Processor Image'
     name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/order-processor:$SHORT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA']
   
   - id: 'Deploy Order Processor'
     name: 'gcr.io/cloud-builders/gcloud'
@@ -49,7 +46,7 @@ steps:
       - 'deploy'
       - 'order-processor'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/order-processor:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/order-processor:$COMMIT_SHA'
       - '--platform'
       - 'managed'
       - '--region'
@@ -60,8 +57,7 @@ steps:
       - '--set-env-vars'
       - 'GCP_PROJECT=$PROJECT_ID'
     waitFor: ['Deploy User Service', 'Push Order Processor Image']
-
-  # Create Order Processor Pub/Sub Subscription
+  
   - id: 'Create Order Processor Pub/Sub Subscription'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -83,15 +79,14 @@ steps:
           --message-retention-duration=7d || true
     waitFor: ['Deploy Order Processor']
 
-  # ----------------------
   # Build and Deploy Restaurant Service (Cloud Run)
   - id: 'Build Restaurant Service'
     name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/restaurant-service:$SHORT_SHA', './restaurant_service']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA', './restaurant_service']
   
   - id: 'Push Restaurant Service Image'
     name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/restaurant-service:$SHORT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA']
   
   - id: 'Deploy Restaurant Service'
     name: 'gcr.io/cloud-builders/gcloud'
@@ -100,7 +95,7 @@ steps:
       - 'deploy'
       - 'restaurant-service'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/restaurant-service:$SHORT_SHA'
+      - 'gcr.io/$PROJECT_ID/restaurant-service:$COMMIT_SHA'
       - '--platform'
       - 'managed'
       - '--region'
@@ -111,8 +106,7 @@ steps:
       - '--set-env-vars'
       - 'GCP_PROJECT=$PROJECT_ID'
     waitFor: ['Deploy Order Processor', 'Push Restaurant Service Image']
-
-  # Create Restaurant Service Pub/Sub Subscription
+  
   - id: 'Create Restaurant Service Pub/Sub Subscription'
     name: 'gcr.io/cloud-builders/gcloud'
     entrypoint: 'bash'
@@ -134,7 +128,6 @@ steps:
           --message-retention-duration=7d || true
     waitFor: ['Deploy Restaurant Service']
 
-  # ----------------------
   # Deploy Delivery Completion Service (Cloud Function)
   - id: 'Deploy Delivery Completion CF'
     name: 'gcr.io/cloud-builders/gcloud'
@@ -154,11 +147,10 @@ steps:
       - '--service-account'
       - 'figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com'
       - '--allow-unauthenticated'
-      - '--set-env-vars'
+      - '--set-env-vars' 
       - 'GCP_PROJECT=$PROJECT_ID'
     waitFor: ['Deploy Restaurant Service']
 
-  # ----------------------
   # Deploy Delivery Orchestrator (Cloud Function)
   - id: 'Deploy Delivery Orchestrator CF'
     name: 'gcr.io/cloud-builders/gcloud'
@@ -180,7 +172,7 @@ steps:
           --region "${_REGION}" \
           --service-account="figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com" \
           --no-allow-unauthenticated \
-          --set-env-vars="DELIVERY_COMPLETION_URL=$DELIVERY_COMPLETION_URL,GCP_PROJECT=$PROJECT_ID,FUNCTION_REGION=${_REGION},SERVICE_ACCOUNT_EMAIL=figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com"
+          --set-env-vars="DELIVERY_COMPLETION_URL=$$DELIVERY_COMPLETION_URL,GCP_PROJECT=$PROJECT_ID,FUNCTION_REGION=${_REGION},SERVICE_ACCOUNT_EMAIL=figgy-service-account@$PROJECT_ID.iam.gserviceaccount.com"
     waitFor: ['Deploy Delivery Completion CF']
 
 options:
